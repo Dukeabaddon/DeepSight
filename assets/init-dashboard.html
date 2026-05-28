@@ -1,0 +1,241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSight — Test Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Space Grotesk', sans-serif; background: #0A0A0A; color: #F0F0F0; min-height: 100vh; }
+    .container { max-width: 900px; margin: 0 auto; padding: 32px 16px; }
+    .header { display: flex; align-items: center; gap: 12px; margin-bottom: 24px; padding-bottom: 24px; border-bottom: 1px solid #2A2A2A; }
+    .header h1 { font-size: 22px; font-weight: 600; background: linear-gradient(135deg, #6C63FF, #00D4AA); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .header .ver { font-size: 12px; color: #555; margin-left: auto; }
+    .card { background: #1A1A1A; border: 1px solid #2A2A2A; border-radius: 12px; padding: 24px; margin-bottom: 16px; }
+    .card-title { font-size: 16px; font-weight: 600; margin-bottom: 16px; }
+    .project-path { font-size: 13px; color: #666; margin-bottom: 12px; word-break: break-all; }
+    .stack-badge { font-size: 12px; color: #00D4AA; margin-bottom: 16px; }
+    .form-row { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+    .form-group { flex: 1; min-width: 140px; }
+    .form-group label { display: block; font-size: 13px; color: #888; margin-bottom: 4px; }
+    .form-group select, .form-group input {
+      width: 100%; padding: 10px 12px; background: #0A0A0A; border: 1px solid #333;
+      border-radius: 6px; color: #F0F0F0; font-family: inherit; font-size: 14px;
+    }
+    .btn {
+      padding: 14px 32px; border: none; border-radius: 8px; font-size: 16px;
+      font-weight: 600; cursor: pointer; font-family: inherit; width: 100%;
+    }
+    .btn-primary { background: linear-gradient(135deg, #6C63FF, #5A52E0); color: white; }
+    .btn-primary:hover { filter: brightness(1.08); }
+    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .hint { font-size: 13px; color: #888; margin-top: 12px; line-height: 1.5; }
+    .steps { margin-top: 16px; }
+    .step { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #222; }
+    .step-icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
+    .step-pending { border: 2px solid #444; color: #666; }
+    .step-running { border: 2px solid #6C63FF; color: #6C63FF; animation: pulse 1.5s infinite; }
+    .step-done { background: #00D4AA; color: #0A0A0A; }
+    .step-error { background: #FF6B6B; color: #0A0A0A; }
+    .step-detail { font-size: 12px; color: #666; margin-left: auto; }
+    @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .progress-bar { height: 4px; background: #2A2A2A; border-radius: 2px; margin: 16px 0; overflow: hidden; }
+    .progress-fill { height: 100%; background: linear-gradient(90deg, #6C63FF, #00D4AA); transition: width 0.4s; }
+    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid #2A2A2A; margin-bottom: 0; }
+    .tab { padding: 10px 16px; cursor: pointer; font-size: 13px; color: #666; border-bottom: 2px solid transparent; }
+    .tab.active { color: #6C63FF; border-bottom-color: #6C63FF; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+    .report-preview {
+      background: #0A0A0A; border: 1px solid #333; border-radius: 8px; padding: 16px;
+      margin-top: 12px; max-height: 360px; overflow-y: auto; font-family: monospace;
+      font-size: 12px; white-space: pre-wrap; color: #CCC;
+    }
+    .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 14px; display: none; z-index: 100; }
+    .toast.show { display: block; }
+    .toast-success { background: rgba(0,212,170,0.2); border: 1px solid #00D4AA; color: #00D4AA; }
+    .toast-error { background: rgba(255,107,107,0.2); border: 1px solid #FF6B6B; color: #FF6B6B; }
+    .link-row { margin-top: 12px; }
+    .link-row a { color: #6C63FF; font-size: 13px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <h1>DeepSight</h1>
+      <span class="ver">v0.1.0</span>
+    </div>
+
+    <div class="card">
+      <div class="card-title">Test this project</div>
+      <div class="project-path" id="project-path">Project: —</div>
+      <div class="stack-badge" id="stack-badge"></div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label>Test type</label>
+          <select id="test-type">
+            <option value="frontend">Frontend</option>
+            <option value="backend">Backend</option>
+            <option value="both">Both</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Local port</label>
+          <input type="number" id="local-port" value="8080" min="1" max="65535">
+        </div>
+        <div class="form-group">
+          <label>Scope</label>
+          <select id="test-scope">
+            <option value="codebase">Full codebase</option>
+            <option value="diff">Git diff only</option>
+          </select>
+        </div>
+      </div>
+
+      <p class="hint">Pick test type and port, then run. DeepSight scans routes, builds a plan, runs Playwright smoke tests, and writes a report. Use the IDE prompt tab to improve tests in Cursor.</p>
+
+      <button class="btn btn-primary" id="run-btn" onclick="runPipeline()">Run DeepSight</button>
+    </div>
+
+    <div class="card" id="progress-card" style="display:none;">
+      <div class="card-title">Progress</div>
+      <div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+      <div class="steps" id="steps-container"></div>
+    </div>
+
+    <div class="card" id="result-card" style="display:none;">
+      <div class="card-title">Results</div>
+      <div class="tab-bar">
+        <div class="tab active" data-tab="report" onclick="switchTab('report')">Report</div>
+        <div class="tab" data-tab="plan" onclick="switchTab('plan')">Plan</div>
+        <div class="tab" data-tab="files" onclick="switchTab('files')">Tests</div>
+        <div class="tab" data-tab="prompt" onclick="switchTab('prompt')">IDE prompt</div>
+      </div>
+      <div class="tab-content active" id="tab-report"><div class="report-preview" id="report-preview"></div></div>
+      <div class="tab-content" id="tab-plan"><div class="report-preview" id="plan-preview"></div></div>
+      <div class="tab-content" id="tab-files"><div class="report-preview" id="files-preview"></div></div>
+      <div class="tab-content" id="tab-prompt"><div class="report-preview" id="prompt-preview"></div></div>
+      <div class="link-row"><a href="#" id="copy-prompt-link" onclick="copyPrompt(); return false;">Copy IDE improvement prompt</a></div>
+    </div>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const projectPath = new URLSearchParams(location.search).get('project_path') || '';
+    const projectEl = document.getElementById('project-path');
+    if (!projectPath) projectEl.textContent = 'Add ?project_path= to the URL';
+    else projectEl.textContent = 'Project: ' + projectPath;
+
+    const steps = [
+      { label: 'Initialize' },
+      { label: 'Scan routes & stack' },
+      { label: 'Build PRD & test plan' },
+      { label: 'Write smoke tests' },
+      { label: 'Run Playwright' },
+      { label: 'Write report' },
+    ];
+
+    function showToast(msg, type) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.className = 'toast show toast-' + type;
+      setTimeout(() => t.classList.remove('show'), 4000);
+    }
+
+    function renderSteps(active, status, detail) {
+      document.getElementById('steps-container').innerHTML = steps.map((s, i) => {
+        let cls = 'step-icon step-pending', icon = '○', det = '';
+        if (i < active) { cls = 'step-icon step-done'; icon = '✓'; }
+        else if (i === active) {
+          cls = status === 'error' ? 'step-icon step-error' : 'step-icon step-running';
+          icon = status === 'error' ? '✕' : '◉';
+          det = detail || '';
+        }
+        return '<div class="step"><div class="' + cls + '">' + icon + '</div><div>' + s.label + '</div><div class="step-detail">' + det + '</div></div>';
+      }).join('');
+    }
+
+    function getConfig() {
+      return {
+        projectPath,
+        type: document.getElementById('test-type').value,
+        localPort: parseInt(document.getElementById('local-port').value, 10),
+        scope: document.getElementById('test-scope').value,
+      };
+    }
+
+    async function runPipeline() {
+      if (!projectPath) { showToast('Missing project_path in URL', 'error'); return; }
+      const btn = document.getElementById('run-btn');
+      btn.disabled = true;
+      btn.textContent = 'Running…';
+      document.getElementById('progress-card').style.display = 'block';
+      document.getElementById('result-card').style.display = 'none';
+      renderSteps(0, 'running', 'Starting…');
+      document.getElementById('progress-fill').style.width = '5%';
+
+      try {
+        renderSteps(2, 'running', 'Pipeline…');
+        document.getElementById('progress-fill').style.width = '40%';
+
+        const res = await fetch('/api/run-pipeline', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(getConfig()),
+        });
+
+        const text = await res.text();
+        let data;
+        try { data = JSON.parse(text); } catch {
+          throw new Error('Server returned non-JSON (restart deepsight: npm run build && npm run web). ' + text.slice(0, 80));
+        }
+        if (!res.ok) throw new Error(data.error || data.detail || 'Run failed');
+
+        document.getElementById('stack-badge').textContent = 'Detected: ' + (data.stack || data.kind || 'web app');
+        document.getElementById('progress-fill').style.width = '100%';
+        renderSteps(steps.length, 'done', data.detail || 'Done');
+
+        document.getElementById('result-card').style.display = 'block';
+        switchTab('report');
+        showToast(data.detail || 'Complete', data.status === 'ok' ? 'success' : 'error');
+        btn.textContent = data.status === 'ok' ? '✓ Run complete' : 'Run finished (see report)';
+      } catch (e) {
+        renderSteps(2, 'error', e.message);
+        showToast(e.message, 'error');
+        btn.textContent = 'Run DeepSight';
+      }
+      btn.disabled = false;
+    }
+
+    async function loadTab(tab) {
+      const map = { report: 'report-preview', plan: 'plan-preview', files: 'files-preview', prompt: 'prompt-preview' };
+      const el = document.getElementById(map[tab]);
+      el.textContent = 'Loading…';
+      try {
+        const res = await fetch('/api/workflow-result?tab=' + tab + '&projectPath=' + encodeURIComponent(projectPath));
+        const data = await res.json();
+        el.textContent = data.content || '(empty)';
+      } catch (e) { el.textContent = e.message; }
+    }
+
+    function switchTab(name) {
+      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
+      document.querySelector('[data-tab="' + name + '"]').classList.add('active');
+      document.getElementById('tab-' + name).classList.add('active');
+      loadTab(name);
+    }
+
+    async function copyPrompt() {
+      try {
+        const res = await fetch('/api/enrich-prompt?projectPath=' + encodeURIComponent(projectPath));
+        const data = await res.json();
+        await navigator.clipboard.writeText(data.content || '');
+        showToast('IDE prompt copied', 'success');
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+  </script>
+</body>
+</html>

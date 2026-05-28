@@ -1,0 +1,59 @@
+{
+  "name": "@deepsight/deepsight-mcp",
+  "version": "0.1.0",
+  "description": "DeepSight - Open source AI-powered testing MCP server. Automatically generates, executes, and debugs tests for your project.",
+  "main": "dist/index.js",
+  "type": "module",
+  "bin": {
+    "deepsight": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "web": "node start-web.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "testing",
+    "automation",
+    "ai",
+    "mcp",
+    "cursor",
+    "vscode",
+    "playwright",
+    "deepsight"
+  ],
+  "author": "",
+  "license": "MIT",
+  "files": [
+    "dist",
+    "assets"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.15.0",
+    "express": "^5.1.0",
+    "fs-extra": "^11.3.0",
+    "open": "^11.0.0",
+    "proper-lockfile": "^4.1.2",
+    "simple-git": "^3.28.0",
+    "ws": "^8.19.0",
+    "yaml": "^2.8.2",
+    "zod": "^3.25.30",
+    "zod-to-json-schema": "^3.25.0"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.52.0",
+    "@google/generative-ai": "^0.21.0",
+    "openai": "^4.90.0"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.1",
+    "@types/fs-extra": "^11.0.4",
+    "@types/node": "^22.0.0",
+    "@types/ws": "^8.18.1",
+    "typescript": "^5.8.0"
+  }
+}

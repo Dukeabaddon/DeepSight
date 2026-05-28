@@ -1,0 +1,89 @@
+/* ── Base Colors (only what this page needs) ── */
+:root {
+    --neutral-100: #131313FF;
+    --neutral-200: #181818FF;
+    --neutral-300: #1F2121FF;
+    --neutral-400: #222424FF;
+    --neutral-500: #323232FF;
+    --neutral-600: #575757FF;
+    --neutral-800: #8B8B8BFF;
+    --neutral-1400: #FFFFFFFF;
+    --neutral-alpha-25: #57656014;
+    --neutral-alpha-50: #57656029;
+    --neutral-alpha-75: #57656038;
+    --neutral-alpha-100: #5765603D;
+    --neutral-alpha-200: #5765604D;
+    --neutral-alpha-300: #57656057;
+    --neutral-alpha-light-0: #D9D9D000;
+    --neutral-alpha-light-50: #D9D9D059;
+    --neutral-alpha-light-75: #D9D9D073;
+    --neutral-alpha-light-100: #D9D9D08C;
+    --neutral-alpha-light-200: #D9D9D0A6;
+    --green-400: #73C281FF;
+    --green-500: #54B365FF;
+    --green-600: #478D54FF;
+    --green-700: #396641FF;
+    --green-800: #28402CFF;
+    --green-alpha-50: #54B3651A;
+    --red-500: #D65959FF;
+    --red-600: #A74444FF;
+    --yellow-500: #C6CC63FF;
+    --yellow-600: #A1A73EFF;
+    --pale-green-100: #FBFEFBFF;
+    --pale-green-200: #F9FCF9FF;
+    --pale-green-300: #EEF3EFFF;
+    --pale-green-500: #D0D9D1FF;
+    --pale-green-600: #8A9D8DFF;
+    --pale-green-700-: #576559FF;
+    --pale-green-1300: #141F15FF;
+}
+
+/* ── Semantic Tokens — dark mode (default) ── */
+:root {
+    --Bg-deep: var(--neutral-100);
+    --Bg-default: var(--neutral-200);
+    --Bg-lifted: var(--neutral-300);
+    --Bg-elevated: var(--neutral-400);
+    --Bg-highlight: var(--neutral-500);
+    --Fg-default: var(--neutral-1400);
+    --Fg-secondary: var(--neutral-800);
+    --Fg-deep: var(--neutral-600);
+    --Fg-error: var(--red-500);
+    --Fg-warning: var(--yellow-500);
+    --Border-deep: var(--neutral-alpha-25);
+    --Border-dark: var(--neutral-alpha-50);
+    --Border-default: var(--neutral-alpha-75);
+    --Border-elevated: var(--neutral-alpha-100);
+    --Border-input: var(--neutral-alpha-200);
+    --Border-input-hover: var(--neutral-alpha-300);
+    --Border-primary: var(--green-500);
+    --Interactive-Bg-default: var(--neutral-alpha-25);
+    --Interactive-Bg-hover: var(--neutral-alpha-50);
+    --Interactive-Bg-primary: var(--green-600);
+    --Interactive-Bg-primary-hover: var(--green-500);
+}
+
+/* ── Semantic Tokens — light mode ── */
+.light {
+    --Bg-deep: var(--pale-green-300);
+    --Bg-default: var(--pale-green-200);
+    --Bg-lifted: var(--pale-green-100);
+    --Bg-elevated: var(--pale-green-100);
+    --Bg-highlight: var(--pale-green-100);
+    --Fg-default: var(--pale-green-1300);
+    --Fg-secondary: var(--pale-green-700-);
+    --Fg-deep: var(--pale-green-600);
+    --Fg-error: var(--red-600);
+    --Fg-warning: var(--yellow-600);
+    --Border-deep: var(--neutral-alpha-light-50);
+    --Border-dark: var(--neutral-alpha-light-50);
+    --Border-default: var(--neutral-alpha-light-75);
+    --Border-elevated: var(--neutral-alpha-light-75);
+    --Border-input: var(--neutral-alpha-light-100);
+    --Border-input-hover: var(--neutral-alpha-light-200);
+    --Border-primary: var(--green-600);
+    --Interactive-Bg-default: var(--neutral-alpha-light-0);
+    --Interactive-Bg-hover: var(--neutral-alpha-light-75);
+    --Interactive-Bg-primary: var(--green-600);
+    --Interactive-Bg-primary-hover: var(--green-700);
+}

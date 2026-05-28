@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DeepSight AI Test Report</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #6C63FF;
+      --teal: #00D4AA;
+      --coral: #FF6B6B;
+      --bg: #0A0A0A;
+      --surface: #1A1A1A;
+      --border: #2A2A2A;
+      --foreground: #F0F0F0;
+      --muted: #888888;
+      --success: #00D4AA;
+      --error: #FF6B6B;
+      --accent: #6C63FF;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Space Grotesk', -apple-system, sans-serif;
+      background: var(--bg);
+      color: var(--foreground);
+      padding: 32px;
+      line-height: 1.6;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 32px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+    .header h1 {
+      font-size: 24px;
+      font-weight: 600;
+      background: linear-gradient(135deg, var(--primary), var(--teal));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+    .badge {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 13px;
+      font-weight: 500;
+    }
+    .badge-pass { background: rgba(0, 212, 170, 0.15); color: var(--teal); border: 1px solid rgba(0, 212, 170, 0.3); }
+    .badge-fail { background: rgba(255, 107, 107, 0.15); color: var(--coral); border: 1px solid rgba(255, 107, 107, 0.3); }
+    .meta-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+    .meta-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px;
+    }
+    .meta-card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .meta-card .value { font-size: 24px; font-weight: 600; margin-top: 4px; }
+    .section { margin-bottom: 32px; }
+    .section h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      padding-bottom: 8px;
+      border-bottom: 1px solid var(--border);
+    }
+    .test-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 8px;
+    }
+    .test-card h4 { font-size: 14px; margin-bottom: 8px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid var(--border); }
+    th { font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
+    .risks { background: rgba(255, 107, 107, 0.1); border: 1px solid rgba(255, 107, 107, 0.3); border-radius: 8px; padding: 16px; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <svg width="32" height="32" viewBox="0 0 300 150">
+      <polygon points="60,115 100,40 140,115 100,80" fill="none" stroke="#6C63FF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+      <polygon points="150,115 150,40 190,80 230,40 230,115 190,80" fill="none" stroke="#6C63FF" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <h1>DeepSight Test Report</h1>
+  </div>
+
+  <div class="meta-grid">
+    <div class="meta-card">
+      <div class="label">Project</div>
+      <div class="value">{{PROJECT_NAME}}</div>
+    </div>
+    <div class="meta-card">
+      <div class="label">Pass Rate</div>
+      <div class="value" style="color: var(--teal);">{{PASS_RATE}}</div>
+    </div>
+    <div class="meta-card">
+      <div class="label">Passed</div>
+      <div class="value" style="color: var(--teal);">{{TOTAL_PASSED}}<span style="font-size:14px;color:var(--muted);"> / {{TOTAL_TESTS}}</span></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <h2>Requirement Validation Summary</h2>
+    {{REQUIREMENTS_HTML}}
+  </div>
+
+  <div class="section">
+    <h2>Coverage Metrics</h2>
+    <table>
+      <thead>
+        <tr><th>Requirement</th><th>Tests</th><th>Passed</th><th>Failed</th></tr>
+      </thead>
+      <tbody>
+        {{COVERAGE_ROWS}}
+      </tbody>
+    </table>
+  </div>
+
+  <div class="section">
+    <h2>Key Gaps / Risks</h2>
+    <div class="risks">{{CRITICAL_ISSUES}}</div>
+  </div>
+</body>
+</html>
