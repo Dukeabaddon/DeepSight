@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="./assets/img/banner.png" alt="DeepSight — local-first MCP testing" width="100%" />
-</p>
-
 # DeepSight
 
 **Turn your JavaScript/TypeScript app into Playwright tests — from your IDE, on your machine.**
@@ -16,6 +12,10 @@ DeepSight is a local-first [MCP](https://modelcontextprotocol.io/) server that s
   <img src="https://img.shields.io/badge/Playwright-E2E-45ba4b?style=flat-square&logo=playwright&logoColor=white" alt="Playwright">
   <img src="https://img.shields.io/badge/TypeScript-3178C6?style=flat-square&logo=typescript&logoColor=white" alt="TypeScript">
   <img src="https://img.shields.io/badge/MCP-Cursor%20%7C%20Claude%20Code-6c63ff?style=flat-square" alt="MCP">
+</p>
+
+<p align="center">
+  <img src="./assets/img/banner.png" alt="DeepSight — local-first MCP testing" width="100%" />
 </p>
 
 <p align="center">
