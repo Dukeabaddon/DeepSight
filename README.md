@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="./assets/img/banner.png" alt="DeepSight — local-first MCP testing" width="100%" />
+</p>
+
 # DeepSight
 
 **Turn your JavaScript/TypeScript app into Playwright tests — from your IDE, on your machine.**
