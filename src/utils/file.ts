@@ -79,10 +79,10 @@ export function normalizeAbsolutePath(p: string): string {
  */
 export function ensureGitignoreEntry(projectPath: string) {
   const gitignorePath = path.resolve(projectPath, '.gitignore');
-  const entry = `\n# DeepSight test artifacts\n${DEEPSIGHT_DIR}\n`;
+  const entry = `\n# DeepSight test artifacts\n${DEEPSIGHT_DIR}\n${DOT_DIR}\n`;
   if (fs.existsSync(gitignorePath)) {
     const content = fs.readFileSync(gitignorePath, 'utf-8');
-    if (!content.includes(DEEPSIGHT_DIR)) {
+    if (!content.includes(DEEPSIGHT_DIR) || !content.includes(DOT_DIR)) {
       fs.appendFileSync(gitignorePath, entry);
     }
   } else {

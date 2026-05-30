@@ -17,7 +17,10 @@ import {
   apiReport,
   apiRunPipeline,
   apiWorkflowResult,
+  apiIterate,
+  apiFixNowPrompt,
 } from './dashboardApi.js';
+import { readLifecycleState } from '../utils/lifecycleState.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -99,6 +102,18 @@ export async function startWebServer(projectPath?: string): Promise<string> {
     app.post('/api/run-pipeline', apiWrap(apiRunPipeline));
     app.post('/api/run-tests', apiWrap(apiRunTests));
     app.post('/api/report', apiWrap(apiReport));
+    app.post('/api/iterate', apiWrap(apiIterate));
+    app.post('/api/fix-now', apiWrap(apiFixNowPrompt));
+
+    app.get('/api/lifecycle', async (req, res) => {
+      try {
+        const pp = req.query.projectPath as string;
+        if (!pp) return res.status(400).json({ error: 'Missing projectPath' });
+        res.json({ state: readLifecycleState(pp) });
+      } catch (e: any) {
+        res.status(500).json({ error: e.message });
+      }
+    });
 
     app.get('/api/enrich-prompt', async (req, res) => {
       try {
@@ -118,6 +133,20 @@ export async function startWebServer(projectPath?: string): Promise<string> {
         res.json(await apiWorkflowResult({ projectPath: pp, tab }));
       } catch (e: any) {
         res.status(500).json({ error: e.message });
+      }
+    });
+
+    app.get('/api/full-report', (req, res) => {
+      try {
+        const pp = req.query.projectPath as string;
+        if (!pp) return res.status(400).send('Missing projectPath');
+        const htmlPath = path.resolve(normalizeAbsolutePath(pp), PATHS.TEST_REPORT_HTML);
+        if (!fs.existsSync(htmlPath)) {
+          return res.status(404).send('No HTML report yet — run DeepSight first.');
+        }
+        res.sendFile(htmlPath);
+      } catch (e: any) {
+        res.status(500).send(e.message);
       }
     });
 

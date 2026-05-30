@@ -1,5 +1,6 @@
 import fs from 'fs';
 import path from 'path';
+import { discoverNextAppRoutes } from './nextAppRouter.js';
 
 export type ScannedRoute = {
   path: string;
@@ -63,11 +64,8 @@ export function parseRoutesFromSource(content: string, fileRel: string): Scanned
 
 export function detectTechStack(projectPath: string): Array<Record<string, string>> {
   const stack: Array<Record<string, string>> = [];
-  const pkgPath = path.join(projectPath, 'package.json');
-  if (!fs.existsSync(pkgPath)) return stack;
-
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  const deps = readDeps(projectPath);
+  if (Object.keys(deps).length === 0) return stack;
 
   stack.push({ language: 'TypeScript' });
   if (deps.react || deps.next) stack.push({ framework: deps.next ? 'Next.js' : 'React' });
@@ -83,18 +81,39 @@ export function detectTechStack(projectPath: string): Array<Record<string, strin
 }
 
 /** What kind of project this is — drives UI tests vs API-only guidance. */
+function readDeps(projectPath: string): Record<string, string> {
+  let dir = projectPath;
+  for (let i = 0; i < 6; i++) {
+    const pkgPath = path.join(dir, 'package.json');
+    if (fs.existsSync(pkgPath)) {
+      try {
+        const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')) as {
+          dependencies?: Record<string, string>;
+          devDependencies?: Record<string, string>;
+        };
+        const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+        if (Object.keys(deps).length > 0) return deps;
+      } catch {
+        /* try parent */
+      }
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return {};
+}
+
 export function detectProjectKind(projectPath: string): ProjectKind {
-  const pkgPath = path.join(projectPath, 'package.json');
   if (fs.existsSync(path.join(projectPath, 'go.mod'))) return 'go';
   try {
     if (fs.readdirSync(projectPath).some((f) => f.endsWith('.csproj'))) return 'dotnet';
   } catch {}
-  if (!fs.existsSync(pkgPath)) {
+  if (!fs.existsSync(path.join(projectPath, 'package.json'))) {
     if (fs.existsSync(path.join(projectPath, 'index.html'))) return 'static_html';
     return 'unknown';
   }
-  const pkg = JSON.parse(fs.readFileSync(pkgPath, 'utf-8'));
-  const deps = { ...pkg.dependencies, ...pkg.devDependencies };
+  const deps = readDeps(projectPath);
   if (deps.next) return 'next';
   if (deps.svelte || deps['@sveltejs/kit']) return 'svelte';
   if (deps.vue) return 'vue';
@@ -120,7 +139,28 @@ export function scanProject(projectPath: string): ProjectScan {
     }
   }
 
-  // Fallback: page filenames (weaker)
+  const nextApp = discoverNextAppRoutes(projectPath);
+  if (nextApp.routes.length > 0) {
+    for (const f of nextApp.router_files) {
+      if (!router_files.includes(f)) router_files.push(f);
+    }
+    for (const r of nextApp.routes) {
+      if (!routes.some((x) => x.path === r.path)) routes.push(r);
+    }
+  }
+
+  // Legacy Pages Router (`pages/`)
+  if (routes.length === 0 || kind === 'next') {
+    const pagesRoots = ['pages', 'src/pages'];
+    for (const pagesRel of pagesRoots) {
+      const pagesDir = path.join(projectPath, pagesRel);
+      if (!fs.existsSync(pagesDir)) continue;
+      router_files.push(pagesRel);
+      collectPagesRouterRoutes(pagesDir, pagesRel, '', routes);
+    }
+  }
+
+  // Fallback: Vite/React `src/pages` filenames (weaker)
   if (routes.length === 0) {
     const pagesDir = path.join(projectPath, 'src', 'pages');
     if (fs.existsSync(pagesDir)) {
@@ -139,12 +179,70 @@ export function scanProject(projectPath: string): ProjectScan {
     }
   }
 
+  const tech_stack = detectTechStack(projectPath);
+  if (nextApp.router_files.length > 0 && !tech_stack.some((t) => t.routing)) {
+    tech_stack.push({ routing: 'Next.js App Router' });
+  } else if (router_files.some((f) => f.includes('pages')) && kind === 'next') {
+    tech_stack.push({ routing: 'Next.js Pages Router' });
+  }
+
   return {
     kind,
-    tech_stack: detectTechStack(projectPath),
+    tech_stack,
     routes,
     router_files,
   };
+}
+
+const PAGES_EXTENSIONS = /\.(tsx|ts|jsx|js)$/;
+
+/** Next.js Pages Router: `pages/about.tsx` → `/about`, `pages/index.tsx` → `/`. */
+function collectPagesRouterRoutes(
+  dirAbs: string,
+  pagesRel: string,
+  relUnderPages: string,
+  routes: ScannedRoute[],
+): void {
+  let entries: fs.Dirent[];
+  try {
+    entries = fs.readdirSync(dirAbs, { withFileTypes: true });
+  } catch {
+    return;
+  }
+
+  for (const ent of entries) {
+    const childAbs = path.join(dirAbs, ent.name);
+    const childRel = relUnderPages ? `${relUnderPages}/${ent.name}` : ent.name;
+
+    if (ent.isDirectory()) {
+      if (ent.name === 'api' || ent.name.startsWith('_')) continue;
+      collectPagesRouterRoutes(childAbs, pagesRel, childRel, routes);
+      continue;
+    }
+    if (!ent.isFile() || !PAGES_EXTENSIONS.test(ent.name)) continue;
+    if (ent.name.startsWith('_')) continue;
+
+    const base = ent.name.replace(PAGES_EXTENSIONS, '');
+    const segments = childRel.replace(PAGES_EXTENSIONS, '').split('/').filter(Boolean);
+    const last = segments[segments.length - 1] ?? base;
+    let routePath: string;
+    if (last === 'index') {
+      segments.pop();
+      routePath = segments.length ? `/${segments.join('/')}` : '/';
+    } else {
+      routePath = `/${segments.join('/')}`;
+    }
+
+    const fileRel = `${pagesRel}/${childRel}`.replace(/\\/g, '/');
+    if (routes.some((r) => r.path === routePath)) continue;
+
+    routes.push({
+      path: routePath,
+      file: fileRel,
+      description: `${last} page (pages router)`,
+      auth_required: false,
+    });
+  }
 }
 
 /** Human label for dashboard. */

@@ -14,6 +14,11 @@ import {
 } from '../utils/scaffoldPipeline.js';
 import { buildIdeEnrichPrompt, removeScaffoldStubSpecs } from '../utils/enrichPrompt.js';
 import { scanProject, stackLabel, detectProjectKind } from '../utils/projectScan.js';
+import { writeLifecycleState, readLifecycleState } from '../utils/lifecycleState.js';
+import { discoverLabel, phaseOrder } from '../utils/lifecycle.js';
+import { writeDiscoverManifest } from '../utils/exploreManifest.js';
+import { syncSpecBaseUrls } from '../utils/playwrightGen.js';
+import { normalizeBaseUrl } from '../utils/playwrightRunner.js';
 
 export async function apiBootstrap(body: {
   projectPath: string;
@@ -141,11 +146,11 @@ export async function apiReport(body: { projectPath: string }) {
   }
   const stored = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
   const run = {
-    ok: stored.ok,
-    passed: stored.ok ? 1 : 0,
-    failed: stored.ok ? 0 : 1,
-    total: 1,
-    log: stored.stdout || '',
+    ok: (stored.summary?.failed ?? 1) === 0,
+    passed: stored.summary?.passed ?? 0,
+    failed: stored.summary?.failed ?? 0,
+    total: stored.summary?.totalRun ?? 0,
+    log: stored.rawLogTail || stored.stdout || '',
   };
   const reportPath = writeReportFromRun(p, run);
   return { status: 'ok', detail: `Report from Playwright run → ${reportPath}` };
@@ -163,7 +168,10 @@ export async function apiRunPipeline(body: {
 
   const config = await readConfig(p);
   const planType = body.type || config.type || 'frontend';
+  const mode = planType === 'both' ? 'both' : planType === 'backend' ? 'backend' : 'frontend';
   const endpoint = config.localEndpoint || `http://localhost:${body.localPort || 8080}/`;
+
+  writeLifecycleState(p, { phase: 'setup', mode, endpoint });
 
   const { scan, detail: scanDetail } = writeCodeSummary(
     p,
@@ -171,11 +179,15 @@ export async function apiRunPipeline(body: {
   );
   const prdDetail = writePrd(p, scan, planType === 'backend' ? 'backend' : 'frontend');
   const planDetail = writeTestPlan(p, scan, planType, endpoint);
+  writeLifecycleState(p, { phase: 'plan', mode, endpoint });
 
   const { promptPath, removedStubs } = prepareEnrichment(p, scan, {
     localEndpoint: endpoint,
     type: planType === 'both' ? 'frontend' : planType,
   });
+
+  writeLifecycleState(p, { phase: 'discover', mode, endpoint });
+  writeDiscoverManifest(p, scan, endpoint, mode);
 
   removeScaffoldStubSpecs(p);
   const smokeCount = writeRouteSmokeSpecs(p, scan, {
@@ -183,9 +195,14 @@ export async function apiRunPipeline(body: {
     type: planType,
   });
 
-  const run = runPlaywrightTests(p);
+  writeLifecycleState(p, { phase: 'enrich', mode, endpoint });
+
+  const baseUrl = normalizeBaseUrl(endpoint);
+  syncSpecBaseUrls(p, baseUrl);
+  const run = runPlaywrightTests(p, { baseUrl });
   const reportPath = writeReportFromRun(p, run);
   const kind = detectProjectKind(p);
+  const discover = discoverLabel(mode);
 
   return {
     status: run.ok ? 'ok' : 'partial',
@@ -194,9 +211,19 @@ export async function apiRunPipeline(body: {
       : `Finished with failures — see report`,
     stack: stackLabel(kind),
     kind,
+    lifecycle: discover,
+    artifacts: {
+      featureMap: PATHS.FEATURE_MAP,
+      exploreManifest: PATHS.EXPLORE_MANIFEST,
+      testResults: PATHS.TEST_RESULTS,
+      repairPrompt: PATHS.REPAIR_PROMPT,
+      lifecycleState: PATHS.LIFECYCLE_STATE,
+    },
+    lifecycleState: readLifecycleState(p),
     steps: { scan: scanDetail, prd: prdDetail, plan: planDetail, smokeCount, removedStubs },
     promptPath,
     reportPath,
+    reportHtmlPath: PATHS.TEST_REPORT_HTML,
     run,
   };
 }
@@ -239,6 +266,54 @@ export async function apiWorkflowResult(query: {
     return { content: contents.substring(0, 12000) };
   }
 
+  if (tab === 'feature-map') {
+    const mapPath = path.resolve(p, PATHS.FEATURE_MAP);
+    if (fs.existsSync(mapPath)) {
+      return {
+        content: JSON.stringify(JSON.parse(fs.readFileSync(mapPath, 'utf-8')), null, 2).substring(
+          0,
+          12000
+        ),
+      };
+    }
+    return { content: 'No feature map. Run pipeline or PRD step first.' };
+  }
+
+  if (tab === 'lifecycle') {
+    const state = readLifecycleState(p);
+    const order = phaseOrder(
+      state?.mode === 'backend' || state?.mode === 'both' ? state.mode : 'frontend'
+    );
+    return {
+      content: JSON.stringify(
+        {
+          current: state,
+          phases: order,
+        },
+        null,
+        2
+      ),
+    };
+  }
+
+  if (tab === 'explore') {
+    const explorePath = path.resolve(p, PATHS.EXPLORE_MANIFEST);
+    if (fs.existsSync(explorePath)) {
+      return {
+        content: fs.readFileSync(explorePath, 'utf-8').substring(0, 12000),
+      };
+    }
+    return { content: 'No explore manifest. Run pipeline first.' };
+  }
+
+  if (tab === 'repair') {
+    const repairPath = path.resolve(p, PATHS.REPAIR_PROMPT);
+    if (fs.existsSync(repairPath)) {
+      return { content: fs.readFileSync(repairPath, 'utf-8').substring(0, 12000) };
+    }
+    return { content: 'No repair_prompt.json yet. Run Playwright first.' };
+  }
+
   if (tab === 'plan') {
     const planPath = path.resolve(p, PATHS.FRONTEND_TEST_PLAN);
     const backPlanPath = path.resolve(p, PATHS.BACKEND_TEST_PLAN);
@@ -256,4 +331,69 @@ export async function apiWorkflowResult(query: {
   }
 
   return { content: 'Unknown tab: ' + tab };
+}
+
+/** One clipboard payload for Cursor — plan + repair + enrich (human tabs stay hidden). */
+export async function apiFixNowPrompt(body: { projectPath: string }) {
+  const p = normalizeAbsolutePath(body.projectPath);
+  const chunks: string[] = [
+    '# DeepSight — fix this project',
+    '',
+    'You are fixing failures from a DeepSight run. Use repair data and PRD/plan below.',
+    'Prefer fixing the app or Playwright specs under `deepsight_tests/`.',
+    'After fixes, tell the user to click Run DeepSight again.',
+    '',
+  ];
+
+  const repairPath = path.resolve(p, PATHS.REPAIR_PROMPT);
+  if (fs.existsSync(repairPath)) {
+    chunks.push('## Repair payload (failures)', '', '```json', fs.readFileSync(repairPath, 'utf-8').slice(0, 24000), '```', '');
+  }
+
+  const enrichPath = path.resolve(p, PATHS.ENRICH_PROMPT);
+  if (fs.existsSync(enrichPath)) {
+    chunks.push('## IDE enrich prompt', '', fs.readFileSync(enrichPath, 'utf-8').slice(0, 12000), '');
+  }
+
+  const planPath = path.resolve(p, PATHS.FRONTEND_TEST_PLAN);
+  if (fs.existsSync(planPath)) {
+    chunks.push('## Test plan (AI only)', '', '```json', fs.readFileSync(planPath, 'utf-8').slice(0, 12000), '```', '');
+  }
+
+  const reportPath = path.resolve(p, PATHS.TEST_REPORT);
+  if (fs.existsSync(reportPath)) {
+    chunks.push('## Human report', '', fs.readFileSync(reportPath, 'utf-8').slice(0, 8000));
+  }
+
+  if (chunks.length <= 6) {
+    return {
+      content:
+        'No repair file yet. Run DeepSight first, then use Fix this now. Check local port matches Vite (e.g. 8081).',
+      hasFailures: false,
+    };
+  }
+
+  const resultsPath = path.resolve(p, PATHS.TEST_RESULTS);
+  let hasFailures = true;
+  if (fs.existsSync(resultsPath)) {
+    const stored = JSON.parse(fs.readFileSync(resultsPath, 'utf-8'));
+    hasFailures = (stored.summary?.failed ?? 0) > 0;
+  }
+
+  return { content: chunks.join('\n'), hasFailures };
+}
+
+/** Re-run Playwright only (iterate) after plan/enrich changes. */
+export async function apiIterate(body: { projectPath: string }) {
+  const p = normalizeAbsolutePath(body.projectPath);
+  writeLifecycleState(p, { phase: 'iterate' });
+  const run = runPlaywrightTests(p);
+  const reportPath = writeReportFromRun(p, run);
+  writeLifecycleState(p, { phase: 'review' });
+  return {
+    status: run.ok ? 'ok' : 'partial',
+    detail: run.ok ? 'Re-run passed' : 'Re-run had failures',
+    reportPath,
+    run,
+  };
 }

@@ -28,9 +28,17 @@
       font-weight: 600; cursor: pointer; font-family: inherit; width: 100%;
     }
     .btn-primary { background: linear-gradient(135deg, #6C63FF, #5A52E0); color: white; }
-    .btn-primary:hover { filter: brightness(1.08); }
-    .btn-primary:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-secondary { background: #1A1A1A; border: 1px solid #444; color: #F0F0F0; margin-top: 12px; }
+    .btn-fix { background: linear-gradient(135deg, #00D4AA, #00A884); color: #0A0A0A; margin-top: 12px; display: none; }
+    .btn-primary:hover, .btn-fix:hover { filter: brightness(1.08); }
+    .btn-primary:disabled, .btn-fix:disabled { opacity: 0.4; cursor: not-allowed; }
     .hint { font-size: 13px; color: #888; margin-top: 12px; line-height: 1.5; }
+    .summary-box {
+      background: rgba(108, 99, 255, 0.08); border: 1px solid #333; border-radius: 8px;
+      padding: 14px; margin-bottom: 12px; font-size: 14px; line-height: 1.5; color: #CCC;
+    }
+    .summary-box.warn { border-color: #FF6B6B; background: rgba(255, 107, 107, 0.08); }
+    .summary-box.ok { border-color: #00D4AA; background: rgba(0, 212, 170, 0.08); }
     .steps { margin-top: 16px; }
     .step { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid #222; }
     .step-icon { width: 24px; height: 24px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-size: 12px; flex-shrink: 0; }
@@ -42,22 +50,15 @@
     @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
     .progress-bar { height: 4px; background: #2A2A2A; border-radius: 2px; margin: 16px 0; overflow: hidden; }
     .progress-fill { height: 100%; background: linear-gradient(90deg, #6C63FF, #00D4AA); transition: width 0.4s; }
-    .tab-bar { display: flex; gap: 0; border-bottom: 1px solid #2A2A2A; margin-bottom: 0; }
-    .tab { padding: 10px 16px; cursor: pointer; font-size: 13px; color: #666; border-bottom: 2px solid transparent; }
-    .tab.active { color: #6C63FF; border-bottom-color: #6C63FF; }
-    .tab-content { display: none; }
-    .tab-content.active { display: block; }
     .report-preview {
       background: #0A0A0A; border: 1px solid #333; border-radius: 8px; padding: 16px;
-      margin-top: 12px; max-height: 360px; overflow-y: auto; font-family: monospace;
+      margin-top: 12px; max-height: 420px; overflow-y: auto; font-family: monospace;
       font-size: 12px; white-space: pre-wrap; color: #CCC;
     }
     .toast { position: fixed; bottom: 24px; right: 24px; padding: 12px 20px; border-radius: 8px; font-size: 14px; display: none; z-index: 100; }
     .toast.show { display: block; }
     .toast-success { background: rgba(0,212,170,0.2); border: 1px solid #00D4AA; color: #00D4AA; }
     .toast-error { background: rgba(255,107,107,0.2); border: 1px solid #FF6B6B; color: #FF6B6B; }
-    .link-row { margin-top: 12px; }
-    .link-row a { color: #6C63FF; font-size: 13px; }
   </style>
 </head>
 <body>
@@ -82,20 +83,12 @@
           </select>
         </div>
         <div class="form-group">
-          <label>Local port</label>
+          <label>App port (Vite printed)</label>
           <input type="number" id="local-port" value="8080" min="1" max="65535">
-        </div>
-        <div class="form-group">
-          <label>Scope</label>
-          <select id="test-scope">
-            <option value="codebase">Full codebase</option>
-            <option value="diff">Git diff only</option>
-          </select>
         </div>
       </div>
 
-      <p class="hint">Pick test type and port, then run. DeepSight scans routes, builds a plan, runs Playwright smoke tests, and writes a report. Use the IDE prompt tab to improve tests in Cursor.</p>
-
+      <p class="hint">Run once. Read the report. If something failed, click Fix this now and paste into Cursor.</p>
       <button class="btn btn-primary" id="run-btn" onclick="runPipeline()">Run DeepSight</button>
     </div>
 
@@ -106,36 +99,33 @@
     </div>
 
     <div class="card" id="result-card" style="display:none;">
-      <div class="card-title">Results</div>
-      <div class="tab-bar">
-        <div class="tab active" data-tab="report" onclick="switchTab('report')">Report</div>
-        <div class="tab" data-tab="plan" onclick="switchTab('plan')">Plan</div>
-        <div class="tab" data-tab="files" onclick="switchTab('files')">Tests</div>
-        <div class="tab" data-tab="prompt" onclick="switchTab('prompt')">IDE prompt</div>
-      </div>
-      <div class="tab-content active" id="tab-report"><div class="report-preview" id="report-preview"></div></div>
-      <div class="tab-content" id="tab-plan"><div class="report-preview" id="plan-preview"></div></div>
-      <div class="tab-content" id="tab-files"><div class="report-preview" id="files-preview"></div></div>
-      <div class="tab-content" id="tab-prompt"><div class="report-preview" id="prompt-preview"></div></div>
-      <div class="link-row"><a href="#" id="copy-prompt-link" onclick="copyPrompt(); return false;">Copy IDE improvement prompt</a></div>
+      <div class="card-title">Report</div>
+      <div class="summary-box" id="summary-box"></div>
+      <div class="report-preview" id="report-preview"></div>
+      <button class="btn btn-secondary" id="full-report-btn" style="display:none;" onclick="openFullReport()">Open full report (HTML)</button>
+      <button class="btn btn-fix" id="fix-btn" onclick="fixNow()">Fix this now — copy for Cursor</button>
     </div>
   </div>
   <div class="toast" id="toast"></div>
 
   <script>
-    const projectPath = new URLSearchParams(location.search).get('project_path') || '';
+    const params = new URLSearchParams(location.search);
+    const projectPath = params.get('project_path') || '';
+    const portParam = params.get('local_port');
+    if (portParam) document.getElementById('local-port').value = portParam;
+
     const projectEl = document.getElementById('project-path');
     if (!projectPath) projectEl.textContent = 'Add ?project_path= to the URL';
     else projectEl.textContent = 'Project: ' + projectPath;
 
     const steps = [
-      { label: 'Initialize' },
-      { label: 'Scan routes & stack' },
-      { label: 'Build PRD & test plan' },
-      { label: 'Write smoke tests' },
-      { label: 'Run Playwright' },
+      { label: 'Scan your app' },
+      { label: 'Build test plan' },
+      { label: 'Run browser checks' },
       { label: 'Write report' },
     ];
+
+    let lastRun = null;
 
     function showToast(msg, type) {
       const t = document.getElementById('toast');
@@ -162,8 +152,36 @@
         projectPath,
         type: document.getElementById('test-type').value,
         localPort: parseInt(document.getElementById('local-port').value, 10),
-        scope: document.getElementById('test-scope').value,
+        scope: 'codebase',
       };
+    }
+
+    function updateSummary(data) {
+      const box = document.getElementById('summary-box');
+      const run = data.run || {};
+      const fixBtn = document.getElementById('fix-btn');
+      if (data.status === 'ok' || run.ok) {
+        box.className = 'summary-box ok';
+        box.textContent = 'All checks passed. DeepSight ran successfully.';
+        fixBtn.style.display = 'none';
+      } else {
+        box.className = 'summary-box warn';
+        box.textContent =
+          'DeepSight finished. ' + (run.passed || 0) + ' passed, ' + (run.failed || 0) + ' failed. ' +
+          'This is normal on first run — often wrong port (try ' + getConfig().localPort + ' or what Vite shows). ' +
+          'Click Fix this now, paste in Cursor, then run again.';
+        fixBtn.style.display = 'block';
+      }
+    }
+
+    async function loadReport() {
+      const el = document.getElementById('report-preview');
+      el.textContent = 'Loading…';
+      try {
+        const res = await fetch('/api/workflow-result?tab=report&projectPath=' + encodeURIComponent(projectPath));
+        const data = await res.json();
+        el.textContent = data.content || '(empty)';
+      } catch (e) { el.textContent = e.message; }
     }
 
     async function runPipeline() {
@@ -177,8 +195,8 @@
       document.getElementById('progress-fill').style.width = '5%';
 
       try {
-        renderSteps(2, 'running', 'Pipeline…');
-        document.getElementById('progress-fill').style.width = '40%';
+        renderSteps(2, 'running', 'Please wait…');
+        document.getElementById('progress-fill').style.width = '50%';
 
         const res = await fetch('/api/run-pipeline', {
           method: 'POST',
@@ -189,52 +207,55 @@
         const text = await res.text();
         let data;
         try { data = JSON.parse(text); } catch {
-          throw new Error('Server returned non-JSON (restart deepsight: npm run build && npm run web). ' + text.slice(0, 80));
+          throw new Error('Server error — restart: npm run build && npm run web in tools/deepsight');
         }
         if (!res.ok) throw new Error(data.error || data.detail || 'Run failed');
 
+        lastRun = data;
         document.getElementById('stack-badge').textContent = 'Detected: ' + (data.stack || data.kind || 'web app');
         document.getElementById('progress-fill').style.width = '100%';
-        renderSteps(steps.length, 'done', data.detail || 'Done');
+        renderSteps(steps.length, 'done', 'Done');
 
         document.getElementById('result-card').style.display = 'block';
-        switchTab('report');
-        showToast(data.detail || 'Complete', data.status === 'ok' ? 'success' : 'error');
-        btn.textContent = data.status === 'ok' ? '✓ Run complete' : 'Run finished (see report)';
+        updateSummary(data);
+        await loadReport();
+        document.getElementById('full-report-btn').style.display = 'block';
+        showToast(data.detail || 'Done', data.status === 'ok' ? 'success' : 'error');
+        btn.textContent = data.status === 'ok' ? 'Run again' : 'Run again';
       } catch (e) {
-        renderSteps(2, 'error', e.message);
+        renderSteps(1, 'error', e.message);
         showToast(e.message, 'error');
         btn.textContent = 'Run DeepSight';
       }
       btn.disabled = false;
     }
 
-    async function loadTab(tab) {
-      const map = { report: 'report-preview', plan: 'plan-preview', files: 'files-preview', prompt: 'prompt-preview' };
-      const el = document.getElementById(map[tab]);
-      el.textContent = 'Loading…';
-      try {
-        const res = await fetch('/api/workflow-result?tab=' + tab + '&projectPath=' + encodeURIComponent(projectPath));
-        const data = await res.json();
-        el.textContent = data.content || '(empty)';
-      } catch (e) { el.textContent = e.message; }
+    function openFullReport() {
+      if (!projectPath) return;
+      window.open('/api/full-report?projectPath=' + encodeURIComponent(projectPath), '_blank');
     }
 
-    function switchTab(name) {
-      document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-      document.querySelectorAll('.tab-content').forEach(t => t.classList.remove('active'));
-      document.querySelector('[data-tab="' + name + '"]').classList.add('active');
-      document.getElementById('tab-' + name).classList.add('active');
-      loadTab(name);
-    }
-
-    async function copyPrompt() {
+    async function fixNow() {
+      if (!projectPath) return;
+      const btn = document.getElementById('fix-btn');
+      btn.disabled = true;
+      btn.textContent = 'Copying…';
       try {
-        const res = await fetch('/api/enrich-prompt?projectPath=' + encodeURIComponent(projectPath));
+        const res = await fetch('/api/fix-now', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ projectPath }),
+        });
         const data = await res.json();
+        if (!res.ok) throw new Error(data.error || 'Fix payload failed');
         await navigator.clipboard.writeText(data.content || '');
-        showToast('IDE prompt copied', 'success');
-      } catch (e) { showToast(e.message, 'error'); }
+        showToast('Copied — paste into Cursor chat', 'success');
+        btn.textContent = 'Copied — paste in Cursor';
+      } catch (e) {
+        showToast(e.message, 'error');
+        btn.textContent = 'Fix this now — copy for Cursor';
+      }
+      btn.disabled = false;
     }
   </script>
 </body>

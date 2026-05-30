@@ -1,0 +1,11 @@
+# npm package extras (primary whitelist: package.json "files")
+docs/
+graphify-out/
+.cursor/
+.claude/
+.env
+.env.*
+*.log
+coverage/
+test-results/
+playwright-report/

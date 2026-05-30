@@ -1,39 +1,50 @@
-# --- Dependencies ---
+# Dependencies
 node_modules/
 
-# --- Build output (run `npm run build` after clone; CI builds before publish) ---
+# Build output (run `npm run build` after clone)
 dist/
-*.tsbuildinfo
 
-# --- GateMCP local runtime cache (NOT source — integration code is gatemcp-integration.mjs) ---
-.gate-mcp/
-
-# --- Secrets & local env ---
+# Secrets — never commit
 .env
 .env.*
 !.env.example
+*.pem
+*.key
+*.p12
+credentials.json
+**/secrets/**
 
-# --- Generated when DeepSight runs on a *target* project (never commit from consumer repos) ---
-deepsight_tests/
-.deepsight/
-# legacy third-party artifact folder name (if present in target projects)
-.legacy-mcp-cache/
-
-# --- Test / Playwright artifacts ---
-test-results/
-playwright-report/
-blob-report/
-playwright/.cache/
-coverage/
-*.log
-
-# --- OS / IDE ---
+# Local / IDE
 .DS_Store
 Thumbs.db
-*.swp
 .idea/
 .vscode/
+*.swp
+*.suo
+*.log
+npm-debug.log*
 
-# --- Optional local scratch ---
-scratch/
+# Agent / monorepo tooling (not part of DeepSight runtime)
+docs/
+graphify-out/
+.cursor/
+.claude/
+.gate-mcp/
+
+# Playwright & test artifacts (generated in target projects)
+playwright-report/
+test-results/
+blob-report/
+deepsight_tests/
+tests/deepsight/
+.deepsight/
+
+# Coverage & caches
+coverage/
+.cache/
+*.tsbuildinfo
+
+# OS / temp
 tmp/
+temp/
+*.tmp

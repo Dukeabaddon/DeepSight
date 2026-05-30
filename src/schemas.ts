@@ -25,6 +25,18 @@ export const InitializationInputSchema = z.object({
 });
 
 // ========================
+// Codebase analysis (doc 02 analyze_codebase)
+// ========================
+export const AnalysisDepthSchema = z.enum(['surface', 'deep', 'exhaustive']);
+
+export const AnalyzeCodebaseInputSchema = z.object({
+  projectPath: ProjectPath,
+  depth: AnalysisDepthSchema.default('surface').describe(
+    'surface = framework + routes + shallow file count; deep = src tree; exhaustive = full tree (capped)',
+  ),
+});
+
+// ========================
 // Code Summary
 // ========================
 export const CodeAnalyzeInputSchema = z.object({
@@ -107,8 +119,61 @@ known_limitations:
 `;
 
 // ========================
-// PRD
+// PRD (spec + legacy)
 // ========================
+export const ParsePrdInputSchema = z.object({
+  projectPath: ProjectPath,
+  prdPath: z.string().optional().describe('Path to PRD markdown file'),
+  prdContent: z.string().optional().describe('Inline PRD markdown'),
+});
+
+export const CoverageTargetSchema = z.enum(['happy-path', 'standard', 'comprehensive']);
+
+export const GenerateTestPlanInputSchema = z.object({
+  projectPath: ProjectPath,
+  prdId: z.string().optional().describe('PRD id from parse_prd; defaults to latest'),
+  coverageTarget: CoverageTargetSchema.default('standard'),
+});
+
+export const GenerateTestCodeInputSchema = z.object({
+  projectPath: ProjectPath,
+  planId: z.string().optional().describe('Test plan id from generate_test_plan'),
+  testIds: z.array(z.string()).default([]).describe('Subset of test case ids; empty = all'),
+  outputDir: z.string().optional().describe('Override output dir (default tests/deepsight)'),
+});
+
+export const RunTestsInputSchema = z.object({
+  projectPath: ProjectPath,
+  testPath: z.string().optional().describe('Relative test directory (default tests/deepsight)'),
+  baseUrl: z
+    .string()
+    .optional()
+    .describe('App URL (default: DEEPSIGHT_BASE_URL, .deepsight/config.json localEndpoint, or detected dev port)'),
+  mode: z.enum(['headless', 'headed', 'debug']).default('headless'),
+  dryRun: z.boolean().default(false).describe('If true, validate specs only — do not execute'),
+  skipServerCheck: z
+    .boolean()
+    .default(false)
+    .describe('If true, run Playwright without probing baseUrl (use when server is up but HEAD fails)'),
+});
+
+export const TestReportFormatSchema = z.enum(['summary', 'detailed', 'ide-patches']);
+
+export const GetTestReportInputSchema = z.object({
+  projectPath: ProjectPath,
+  runId: z.string().optional().describe('Run id from run_tests; defaults to latest'),
+  format: TestReportFormatSchema.default('detailed'),
+});
+
+export const AutoHealTestInputSchema = z.object({
+  projectPath: ProjectPath,
+  testPath: z.string().optional().describe('Spec directory to patch (default tests/deepsight)'),
+  testId: z.string().optional().describe('Heal one test case id from classified report'),
+  failureLog: z.string().optional().describe('Optional failure log when report missing'),
+  domSnapshot: z.string().optional().describe('Optional DOM HTML snapshot (future scoring)'),
+  applyPatches: z.boolean().default(true).describe('Apply suggested locator lines into .spec.ts'),
+});
+
 export const GenerateStandardPRDInputSchema = z.object({
   projectPath: ProjectPath,
   prdFiles: z.array(z.string()).optional().describe('Paths to PRD document files (optional)'),

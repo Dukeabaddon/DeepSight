@@ -8,7 +8,14 @@ import {
   removeScaffoldStubSpecs,
   isEnrichmentComplete,
 } from './enrichPrompt.js';
-import { generateHtmlReport } from './report.js';
+import { generateHtmlReport, generateHtmlReportFromResults } from './report.js';
+import { writeFeatureMap } from './featureMap.js';
+import { writeRunArtifacts } from './artifacts.js';
+import { runPlaywrightTests as runPlaywrightTestsCore } from './playwrightRunner.js';
+import { writeLifecycleState } from './lifecycleState.js';
+import { writeDiscoverManifest } from './exploreManifest.js';
+import { sanitizePlaywrightLog } from './logSanitize.js';
+import type { ProjectMode } from './lifecycle.js';
 
 export type ScaffoldConfig = {
   projectPath: string;
@@ -22,6 +29,13 @@ export function writeCodeSummary(projectPath: string, testType: string): { scan:
   const summaryPath = path.resolve(projectPath, PATHS.CODE_SUMMARY);
   fs.mkdirSync(path.dirname(summaryPath), { recursive: true });
   fs.writeFileSync(summaryPath, scanToSummaryYaml(scan, testType), 'utf-8');
+  const genDir = path.resolve(projectPath, PATHS.GENERATED_DIR);
+  fs.mkdirSync(genDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(genDir, 'code_summary.json'),
+    JSON.stringify({ testType, scan }, null, 2),
+    'utf-8'
+  );
   return {
     scan,
     detail: `Scanned ${scan.routes.length} routes from ${scan.router_files.length ? scan.router_files.join(', ') : 'pages fallback'}`,
@@ -59,6 +73,21 @@ export function writePrd(projectPath: string, scan: ProjectScan, testType: strin
   };
   const prdPath = path.resolve(projectPath, PATHS.STANDARD_PRD);
   fs.writeFileSync(prdPath, JSON.stringify(prd, null, 2), 'utf-8');
+
+  const genDir = path.resolve(projectPath, PATHS.GENERATED_DIR);
+  fs.mkdirSync(genDir, { recursive: true });
+  fs.writeFileSync(
+    path.join(genDir, 'normalized_prd.json'),
+    JSON.stringify(prd, null, 2),
+    'utf-8'
+  );
+
+  writeFeatureMap(projectPath, scan, testType);
+  writeLifecycleState(projectPath, {
+    phase: 'feature_map',
+    mode: (testType === 'backend' ? 'backend' : testType === 'both' ? 'both' : 'frontend') as ProjectMode,
+  });
+
   return `${requirements.length} requirements`;
 }
 
@@ -231,51 +260,22 @@ export function prepareEnrichment(
   return { promptPath, removedStubs };
 }
 
-export function runPlaywrightTests(projectPath: string): {
-  ok: boolean;
-  passed: number;
-  failed: number;
-  total: number;
-  log: string;
-} {
-  const testDir = path.resolve(projectPath, PATHS.TEST_CODE_DIR);
-  const specs = fs.existsSync(testDir)
-    ? fs.readdirSync(testDir).filter((f) => f.endsWith('.spec.ts'))
-    : [];
-
-  if (specs.length === 0) {
-    return { ok: false, passed: 0, failed: 0, total: 0, log: 'No .spec.ts files in deepsight_tests. Enrich with IDE AI first.' };
-  }
-
-  try {
-    const out = execSync('npx playwright test deepsight_tests --reporter=list', {
-      cwd: projectPath,
-      timeout: 300000,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-    const passed = (out.match(/\bpassed\b/g) || []).length;
-    const failed = (out.match(/\bfailed\b/g) || []).length;
-    const resultsPath = path.resolve(projectPath, PATHS.TEST_RESULTS);
-    fs.mkdirSync(path.dirname(resultsPath), { recursive: true });
-    fs.writeFileSync(
-      resultsPath,
-      JSON.stringify({ ok: true, stdout: out, at: new Date().toISOString() }, null, 2),
-      'utf-8'
-    );
-    return { ok: true, passed, failed, total: passed + failed, log: out.slice(-4000) };
-  } catch (e: any) {
-    const log = (e.stdout || '') + (e.stderr || '') + (e.message || '');
-    const resultsPath = path.resolve(projectPath, PATHS.TEST_RESULTS);
-    fs.mkdirSync(path.dirname(resultsPath), { recursive: true });
-    fs.writeFileSync(
-      resultsPath,
-      JSON.stringify({ ok: false, stdout: log, at: new Date().toISOString() }, null, 2),
-      'utf-8'
-    );
-    return { ok: false, passed: 0, failed: 1, total: 1, log: log.slice(-4000) };
-  }
+export function runPlaywrightTests(
+  projectPath: string,
+  options: { testPath?: string; baseUrl?: string; mode?: 'headless' | 'headed' | 'debug' } = {},
+) {
+  const run = runPlaywrightTestsCore(projectPath, options);
+  return {
+    ok: run.ok,
+    passed: run.passed,
+    failed: run.failed,
+    total: run.total,
+    log: run.log,
+    baseUrl: run.baseUrl,
+  };
 }
+
+export { runPlaywrightTestsCore };
 
 export function writeReportFromRun(
   projectPath: string,
@@ -295,24 +295,37 @@ export function writeReportFromRun(
 - **Source:** Playwright execution (not estimated)
 
 ## Results
-- **Status:** ${run.ok ? 'Completed' : 'Completed with failures'}
+- **Status:** ${run.ok ? 'All checks passed' : 'Needs fixes (normal on first run)'}
 - **Planned cases:** ${planLen}
-- **Run summary:** see Playwright output below
+- **Passed / failed:** ${run.passed} / ${run.failed} (total ${run.total})
+
+## What this means
+${run.ok
+    ? 'Smoke tests passed against your running app. You can enrich tests in Cursor for deeper coverage.'
+    : 'DeepSight is working. Failures usually mean: (1) app port mismatch — use the port Vite prints, e.g. 8081; (2) smoke tests are shallow until Cursor writes real tests. Click **Fix this now** on the dashboard to copy an AI repair brief.'}
 
 ## Playwright output (tail)
 \`\`\`
-${run.log}
+${sanitizePlaywrightLog(run.log)}
 \`\`\`
 
 ## Next steps
-${run.ok ? 'Review failures in output and update specs in `deepsight_tests/`.' : 'Fix failing specs or app issues, then re-run from the dashboard.'}
+${run.ok ? 'Optional: enrich tests in Cursor for deeper coverage.' : 'Use **Fix this now** on the dashboard — paste into Cursor to fix the app or tests, then run again.'}
 `;
 
   const mdPath = path.resolve(projectPath, PATHS.TEST_REPORT);
   fs.writeFileSync(mdPath, md, 'utf-8');
-  try {
-    generateHtmlReport(mdPath);
-  } catch {}
+  const resultsPath = path.resolve(projectPath, PATHS.TEST_RESULTS);
+  if (fs.existsSync(resultsPath)) {
+    try {
+      generateHtmlReportFromResults(projectPath);
+    } catch {
+      /* legacy markdown template optional */
+      try {
+        generateHtmlReport(mdPath);
+      } catch {}
+    }
+  }
   return mdPath;
 }
 

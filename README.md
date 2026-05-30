@@ -1,155 +1,230 @@
-# DeepSight 🕵️
+<p align="center">
+  <strong>DeepSight</strong><br/>
+  Local-first MCP server for code-aware test planning, Playwright generation, execution, and repair.
+</p>
 
-**Let your code test itself.**
+<p align="center">
+  <a href="https://github.com/Dukeabaddon/DeepSight/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://nodejs.org/"><img src="https://img.shields.io/badge/node-%3E%3D18-green.svg" alt="Node >= 18"></a>
+  <a href="https://modelcontextprotocol.io/"><img src="https://img.shields.io/badge/MCP-stdio-purple.svg" alt="MCP stdio"></a>
+  <img src="https://img.shields.io/badge/status-0.1.0--alpha-orange.svg" alt="Alpha MVP">
+</p>
 
-DeepSight is an open-source, AI-powered testing MCP server that integrates with your IDE (Cursor, VS Code, Windsurf, Claude Code) to automatically analyze, generate, and execute tests for your project.
+---
 
-No cloud dependency. No paywalls. No API keys required (Option A).
+DeepSight scans your JavaScript/TypeScript app, builds a test plan, generates Playwright specs, runs them against your **local dev server**, and produces HTML + repair briefs for your IDE. No cloud upload of your codebase.
 
-**Setup:** `npm install && npm run build` — then `npm start` (MCP) or `npm run web` (dashboard).
+**Repository:** [github.com/Dukeabaddon/DeepSight](https://github.com/Dukeabaddon/DeepSight)
 
-## Repository contents
+---
 
-| Path | Purpose |
-|------|---------|
-| `src/` | MCP server (TypeScript → `dist/`) |
-| `assets/` | Web dashboard + test editor UI |
-| `start-web.mjs` | Launch dashboard (`npm run web`) |
+## Features (v0.1 alpha)
 
-FlowState/RepoFlux pipeline helpers (GateMCP, graphify) live in the main app under `lib/deepsight-integrations/`, not in this package.
+| Capability | Status |
+|------------|--------|
+| MCP tools (analyze → plan → codegen → run → report → heal) | Shipped |
+| Tree-sitter code analysis + import graph | Shipped |
+| Web dashboard (`npm run web`) | Shipped |
+| HTML test report with per-case errors | Shipped |
+| Playwright local execution | Shipped |
+| Optional LLM auto-generation | Optional env keys |
+| API/backend test generation | Roadmap |
+| Screenshot / video artifacts | Roadmap |
+| CI GitHub Action export | Roadmap |
 
-## Supported stacks (automatic detection)
+---
 
-| Stack | Detection | UI tests (Playwright) |
-|-------|-----------|------------------------|
-| React / Vite / Next | `package.json` | Yes — routes from `App.tsx` |
-| Vue / Svelte / Angular | `package.json` | Yes — route scan + smoke tests |
-| Static HTML | `index.html` | Yes |
-| Node API (Express, etc.) | `package.json` | HTTP smoke (`backend` type) |
-| Go / .NET | `go.mod` / `.csproj` | Use **Backend** + IDE prompt (no auto UI) |
+## Tech stack
 
-Pick **Frontend**, **Backend**, or **Both**, set **local port**, click **Run DeepSight**. Optional: **IDE prompt** tab to improve tests in Cursor.
+- **Runtime:** Node.js 18+, TypeScript (ESM)
+- **Protocol:** [Model Context Protocol](https://modelcontextprotocol.io/) (stdio)
+- **Testing:** Playwright (`@playwright/test`)
+- **Analysis:** tree-sitter (JS/TS), route inventory, SQLite or JSON store
+- **Dashboard:** Express 5 + static UI (`assets/init-dashboard.html`)
+- **Validation:** Zod schemas for all MCP tool inputs
 
-## How It Works
+---
 
-DeepSight works in two modes:
+## Requirements
 
-### Option A: AI-Assisted (default, no setup needed)
+- Node.js **18+**
+- Chromium for Playwright: `npx playwright install chromium` (once per machine)
+- Your app running locally (e.g. `npm run dev`) when executing tests
 
-Your IDE's AI assistant handles everything directly — no extra API keys, no cloud calls.
+---
 
-```
-You: "Test this project with DeepSight"
-
-Your IDE AI:
-1. Scans your codebase
-2. Writes a structured code summary
-3. Generates test plans
-4. Writes Playwright test files
-5. Runs them against your local server
-```
-
-### Option B: LLM-Powered (configure once)
-
-Set environment variables and DeepSight auto-generates tests using the LLM of your choice.
-
-| Provider | Env Var | Example |
-|----------|---------|---------|
-| **Gemini** | `DEEPSIGHT_LLM_PROVIDER=gemini` + `DEEPSIGHT_LLM_API_KEY=...` | `gemini-2.0-flash` |
-| **OpenAI** | `DEEPSIGHT_LLM_PROVIDER=openai` + `DEEPSIGHT_LLM_API_KEY=...` | `gpt-4o` |
-| **Ollama** | `DEEPSIGHT_LLM_PROVIDER=ollama` + `DEEPSIGHT_LLM_BASE_URL=http://localhost:11434` | `llama3.2` |
-
-## Quick Start
-
-### 1. Install
+## Install
 
 ```bash
-npm install -g @deepsight/deepsight-mcp
+git clone https://github.com/Dukeabaddon/DeepSight.git
+cd DeepSight
+npm install
+npm run build
+npx playwright install chromium
 ```
 
-Or use directly:
+Verify the pipeline:
 
 ```bash
-npx @deepsight/deepsight-mcp
+npm run test:analyze
 ```
 
-### 2. Add to Your IDE
+---
 
-**Cursor / VS Code** — add to your MCP config:
+## Quick start — Web dashboard
+
+Best for first-time use on a real project (Vite, Next.js, etc.).
+
+```bash
+# Terminal 1 — your app
+cd /path/to/your-app && npm run dev
+
+# Terminal 2 — DeepSight
+cd DeepSight
+export DEEPSIGHT_PROJECT_PATH=/path/to/your-app   # PowerShell: $env:DEEPSIGHT_PROJECT_PATH = "..."
+npm run web
+```
+
+Open the printed URL (default `http://localhost:9080/init?project_path=...`).
+
+1. Choose **Frontend**, **Backend**, or **Both**
+2. Set **App port** (e.g. `8080` for Vite, `3000` for Next.js)
+3. Click **Run DeepSight**
+4. Open **Full report (HTML)** for pass/fail details
+5. Use **Fix this now** to copy a repair brief into Cursor
+
+---
+
+## Quick start — MCP (Cursor / Claude Code)
+
+Add to `.cursor/mcp.json` (adjust the absolute path):
 
 ```json
 {
   "mcpServers": {
-    "DeepSight": {
-      "command": "npx",
-      "args": ["@deepsight/deepsight-mcp"]
+    "deepsight": {
+      "command": "node",
+      "args": ["/absolute/path/to/DeepSight/dist/index.js"],
+      "env": {
+        "DEEPSIGHT_BASE_URL": "http://localhost:3000"
+      }
     }
   }
 }
 ```
 
-### 3. Test Your Project
+Restart the IDE, then ask: *“Run DeepSight analyze_codebase on this project.”*
 
-Open your project in the IDE and tell the AI:
+### Core MCP tools
 
-> "Help me test this project with DeepSight"
+| Tool | Purpose |
+|------|---------|
+| `analyze_codebase` | Scan routes, entities, import graph |
+| `parse_prd` | Normalize requirements from code + optional PRD.md |
+| `generate_test_plan` | Priority-tagged test cases |
+| `generate_test_code` | Playwright specs → `tests/deepsight/` + `deepsight_tests/` |
+| `run_tests` | Headless Playwright against live app |
+| `get_test_report` | JSON + markdown + HTML summary |
+| `auto_heal_test` | Selector / timeout heal proposals |
+| `deepsight_open_test_result_dashboard` | Launch web UI |
 
-DeepSight will automatically walk through the workflow:
+Legacy aliases (`deepsight_*`) remain for compatibility.
 
-1. **Bootstrap** — Sets up project structure
-2. **Code Summary** — Analyzes your codebase (YAML)
-3. **PRD** — Creates a product requirements document
-4. **Test Plan** — Generates frontend + backend test cases
-5. **Code + Execute** — Writes Playwright tests and runs them
-6. **Dashboard** — Opens an interactive test results viewer
+---
 
-## Tools
+## Environment variables
 
-| Tool | Description |
-|------|-------------|
-| `deepsight_bootstrap` | Initialize project for testing |
-| `deepsight_generate_code_summary` | Scan codebase and create structured YAML summary |
-| `deepsight_generate_standardized_prd` | Generate a PRD from code analysis |
-| `deepsight_generate_frontend_test_plan` | Create frontend test plan |
-| `deepsight_generate_backend_test_plan` | Create backend API test plan |
-| `deepsight_generate_code_and_execute` | Generate Playwright tests and execute them |
-| `deepsight_open_test_result_dashboard` | Open interactive test review dashboard |
-| `deepsight_check_info` | Check DeepSight version and configuration |
+| Variable | Description |
+|----------|-------------|
+| `DEEPSIGHT_PROJECT_PATH` | Target app root (dashboard / verify scripts) |
+| `DEEPSIGHT_BASE_URL` | App URL, e.g. `http://localhost:8080` |
+| `DEEPSIGHT_LLM_API_KEY` | Optional — enable LLM auto-generation |
+| `DEEPSIGHT_LLM_PROVIDER` | `openai` \| `gemini` \| `ollama` |
+| `DEEPSIGHT_LLM_MODEL` | Model id for provider |
 
-## Project Structure
+Copy [`.env.example`](.env.example) to `.env.local` — **never commit secrets**.
 
-When you initialize DeepSight on a project, it creates:
+Port resolution order: `DEEPSIGHT_BASE_URL` → `.deepsight/config.json` → Vite/Next heuristics from `package.json`.
+
+---
+
+## Output in your project
+
+DeepSight writes under the **project under test** (not inside the DeepSight repo):
 
 ```
-your-project/
-├── deepsight_tests/
-│   ├── standard_prd.json
-│   ├── deepsight_frontend_test_plan.json
-│   ├── deepsight_backend_test_plan.json
-│   ├── deepsight-test-report.md
-│   ├── deepsight-test-report.html
-│   ├── TC001_*.spec.ts
-│   └── tmp/
-│       ├── code_summary.yaml
-│       ├── test_results.json
-│       └── raw_report.md
-└── .deepsight/
-    └── config.json
+your-app/
+├── .deepsight/           # config, analysis.db, playwright config copy
+├── deepsight_tests/      # generated specs, reports, tmp results
+└── tests/deepsight/      # CI-friendly spec copies
 ```
 
-## What DeepSight Tests
+Add to your app `.gitignore`:
 
-- **Functional Testing** — Core business logic and user workflows
-- **Error Handling** — Exception handling and error recovery
-- **Security** — Vulnerability scanning and security validation
-- **Authorization** — User permissions and access control
-- **Boundary Testing** — Input validation and data limits
-- **Edge Cases** — Unusual scenarios and corner cases
-- **UI/UX** — User interface interactions and flows
+```
+deepsight_tests/
+.deepsight/
+tests/deepsight/
+```
 
-**Supported:** React, Vue, Angular, Svelte, Next.js, Node.js, Express, FastAPI, REST APIs, and more.
+---
+
+## Development
+
+```bash
+npm run build              # compile TypeScript → dist/
+npm run test:analyze       # pipeline QA on bundled sample
+npm run test:live:e2e      # full E2E (set DEEPSIGHT_PROJECT_PATH + DEEPSIGHT_BASE_URL)
+npm run security:check     # scan for accidental secrets
+```
+
+Live E2E example:
+
+```powershell
+$env:DEEPSIGHT_PROJECT_PATH = "C:\path\to\your-app"
+$env:DEEPSIGHT_BASE_URL = "http://localhost:8080"
+npm run test:live:e2e
+```
+
+---
+
+## Security
+
+- Runs locally; no DeepSight-hosted code upload.
+- Optional LLM keys stay in **your** environment.
+- Run `npm run security:check` before commit or release.
+- See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+
+---
+
+## Publish to npm (maintainers)
+
+```bash
+npm run build
+npm publish --access public
+```
+
+Package name: `@deepsight/deepsight-mcp` (ships `dist/` + `assets/`).
+
+---
+
+## Roadmap
+
+- Richer API/backend tests (Express/Fastify/Nest)
+- Trace / screenshot / video in HTML report
+- CI workflow generator
+- Stronger auto-heal (DOM re-rank)
+
+Track issues on [GitHub](https://github.com/Dukeabaddon/DeepSight/issues).
+
+---
 
 ## License
 
-MIT — free to use, modify, and distribute.
+[MIT](LICENSE) © [Dukeabaddon](https://github.com/Dukeabaddon)
 
+---
+
+<p align="center">
+  <sub>DeepSight is independent open source — not affiliated with any parent monorepo that may vendor this folder for local development.</sub>
+</p>

@@ -2,6 +2,8 @@ import fs from 'fs';
 import fse from 'fs-extra';
 import path from 'path';
 import { PATHS, ABS_PATHS } from '../paths.js';
+import type { TestResultsArtifact } from './artifacts.js';
+import { classifiedFailureFromResult } from './failureClassifier.js';
 
 interface TestResult {
   testName: string;
@@ -139,4 +141,122 @@ export async function generateHtmlAndPdfFromMarkdown(mdFile: string): Promise<vo
   if (fs.existsSync(mdFile)) {
     await generateHtmlReport(mdFile);
   }
+}
+
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+/** Interactive HTML report from test_results.json (dashboard Full Report). */
+export function generateHtmlReportFromResults(
+  projectPath: string,
+  artifact?: TestResultsArtifact,
+): string {
+  const resultsPath = path.resolve(projectPath, PATHS.TEST_RESULTS);
+  const data: TestResultsArtifact =
+    artifact ??
+    (fs.existsSync(resultsPath)
+      ? (JSON.parse(fs.readFileSync(resultsPath, 'utf-8')) as TestResultsArtifact)
+      : {
+          projectName: path.basename(projectPath),
+          executionTimestamp: new Date().toISOString(),
+          summary: { totalRun: 0, passed: 0, failed: 0, skipped: 0 },
+          results: [],
+        });
+
+  const { summary, results } = data;
+  const passRate =
+    summary.totalRun > 0 ? Math.round((summary.passed / summary.totalRun) * 100) : 0;
+
+  const rows = results
+    .map((r) => {
+      const cat = classifiedFailureFromResult(r);
+      const statusClass = r.status === 'passed' ? 'pass' : r.status === 'skipped' ? 'skip' : 'fail';
+      const err = r.errorMessage ? escapeHtml(r.errorMessage) : '';
+      const detailId = `detail-${r.testId}-${(r.specFile ?? 'x').replace(/\W/g, '')}`;
+      return `
+      <tr class="row-${statusClass}" data-status="${r.status}">
+        <td>${escapeHtml(r.testId)}</td>
+        <td>${escapeHtml(r.title)}</td>
+        <td><span class="badge ${statusClass}">${r.status}</span></td>
+        <td>${r.durationMs ?? '—'}ms</td>
+        <td>${escapeHtml(r.specFile ?? '—')}</td>
+        <td>${r.status === 'failed' ? escapeHtml(cat.category) : '—'}</td>
+        <td>${err ? `<button type="button" class="link-btn" onclick="toggleDetail('${detailId}')">Details</button>` : '—'}</td>
+      </tr>
+      ${err ? `<tr id="${detailId}" class="detail-row" style="display:none"><td colspan="7"><pre class="err">${err}</pre></td></tr>` : ''}`;
+    })
+    .join('');
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>DeepSight Report — ${escapeHtml(data.projectName)}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600&display=swap" rel="stylesheet">
+  <style>
+    body { font-family: 'Space Grotesk', sans-serif; background: #0a0a0a; color: #f0f0f0; margin: 0; padding: 24px; }
+    h1 { font-size: 1.4rem; margin: 0 0 8px; background: linear-gradient(135deg, #6c63ff, #00d4aa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+    .meta { color: #888; font-size: 13px; margin-bottom: 20px; }
+    .cards { display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 20px; }
+    .card { background: #1a1a1a; border: 1px solid #333; border-radius: 8px; padding: 12px 16px; min-width: 100px; }
+    .card strong { display: block; font-size: 1.25rem; }
+    table { width: 100%; border-collapse: collapse; background: #111; border: 1px solid #333; border-radius: 8px; overflow: hidden; }
+    th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #222; font-size: 13px; vertical-align: top; }
+    th { background: #1a1a1a; color: #aaa; font-weight: 600; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 11px; text-transform: uppercase; }
+    .badge.pass { background: rgba(0,212,170,0.2); color: #00d4aa; }
+    .badge.fail { background: rgba(255,107,107,0.2); color: #ff6b6b; }
+    .badge.skip { background: rgba(255,255,255,0.1); color: #aaa; }
+    .link-btn { background: none; border: none; color: #6c63ff; cursor: pointer; text-decoration: underline; font: inherit; }
+    pre.err { white-space: pre-wrap; word-break: break-word; background: #0a0a0a; padding: 12px; border-radius: 6px; color: #ccc; font-size: 12px; margin: 0; max-height: 280px; overflow: auto; }
+    .filters { margin-bottom: 12px; }
+    .filters button { margin-right: 8px; padding: 6px 12px; border-radius: 6px; border: 1px solid #444; background: #1a1a1a; color: #eee; cursor: pointer; }
+    .filters button.active { border-color: #6c63ff; color: #6c63ff; }
+  </style>
+</head>
+<body>
+  <h1>DeepSight Test Report</h1>
+  <div class="meta">${escapeHtml(data.projectName)} · ${escapeHtml(data.executionTimestamp)} · ${passRate}% pass rate</div>
+  <div class="cards">
+    <div class="card"><span>Total</span><strong>${summary.totalRun}</strong></div>
+    <div class="card"><span>Passed</span><strong style="color:#00d4aa">${summary.passed}</strong></div>
+    <div class="card"><span>Failed</span><strong style="color:#ff6b6b">${summary.failed}</strong></div>
+    <div class="card"><span>Skipped</span><strong>${summary.skipped}</strong></div>
+  </div>
+  <div class="filters">
+    <button type="button" class="active" onclick="filterRows('all', this)">All</button>
+    <button type="button" onclick="filterRows('passed', this)">Passed</button>
+    <button type="button" onclick="filterRows('failed', this)">Failed</button>
+  </div>
+  <table>
+    <thead><tr><th>ID</th><th>Title</th><th>Status</th><th>Duration</th><th>Spec</th><th>Category</th><th></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="7">No test results.</td></tr>'}</tbody>
+  </table>
+  <script>
+    function toggleDetail(id) {
+      var el = document.getElementById(id);
+      if (el) el.style.display = el.style.display === 'none' ? 'table-row' : 'none';
+    }
+    function filterRows(status, btn) {
+      document.querySelectorAll('.filters button').forEach(function(b) { b.classList.remove('active'); });
+      btn.classList.add('active');
+      document.querySelectorAll('tbody tr[data-status]').forEach(function(tr) {
+        tr.style.display = status === 'all' || tr.getAttribute('data-status') === status ? '' : 'none';
+      });
+      document.querySelectorAll('.detail-row').forEach(function(tr) { tr.style.display = 'none'; });
+    }
+  </script>
+</body>
+</html>`;
+
+  const htmlPath = path.resolve(projectPath, PATHS.TEST_REPORT_HTML);
+  fs.mkdirSync(path.dirname(htmlPath), { recursive: true });
+  fs.writeFileSync(htmlPath, html, 'utf-8');
+  return htmlPath;
 }
